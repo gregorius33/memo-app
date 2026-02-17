@@ -5,7 +5,7 @@ const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'fallback-secret-min-32-characters-long'
 )
 const COOKIE_NAME = 'session'
-const COOKIE_MAX_AGE = 60 * 60 * 24 * 7 // 7 days
+const COOKIE_MAX_AGE = 60 * 60 * 24 * 7 // 7일 (클라이언트에서는 30분 무활동 시 자동 로그아웃 적용)
 
 export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, 10)

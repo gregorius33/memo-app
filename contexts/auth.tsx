@@ -1,8 +1,11 @@
 'use client'
 
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react'
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 
 export type User = { id: string; email: string; name: string | null }
+
+/** 로그인 상태에서 일정 시간(분) 동안 활동이 없으면 자동 로그아웃 */
+const IDLE_LOGOUT_MINUTES = 30
 
 type AuthContextValue = {
   user: User | null
@@ -18,6 +21,7 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const refreshSession = useCallback(async () => {
     try {
@@ -30,10 +34,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(false)
     }
   }, [])
-
-  useEffect(() => {
-    refreshSession()
-  }, [refreshSession])
 
   const login = useCallback(
     async (email: string, password: string) => {
@@ -65,10 +65,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   )
 
   const logout = useCallback(async () => {
+    if (idleTimerRef.current) {
+      clearTimeout(idleTimerRef.current)
+      idleTimerRef.current = null
+    }
     await fetch('/api/auth/logout', { method: 'POST' })
     setUser(null)
     window.location.href = '/login'
   }, [])
+
+  // 로그인 상태에서 일정 시간 무활동 시 자동 로그아웃
+  useEffect(() => {
+    if (!user) return
+
+    const scheduleIdleLogout = () => {
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
+      idleTimerRef.current = setTimeout(() => {
+        logout()
+      }, IDLE_LOGOUT_MINUTES * 60 * 1000)
+    }
+
+    const events = ['mousedown', 'keydown', 'scroll', 'touchstart']
+    scheduleIdleLogout()
+    events.forEach((ev) => window.addEventListener(ev, scheduleIdleLogout))
+    return () => {
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
+      events.forEach((ev) => window.removeEventListener(ev, scheduleIdleLogout))
+    }
+  }, [user, logout])
+
+  useEffect(() => {
+    refreshSession()
+  }, [refreshSession])
 
   return (
     <AuthContext.Provider
